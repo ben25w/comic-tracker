@@ -119,20 +119,21 @@
     <h2 style="font-size: 18px; margin-bottom: 15px;">➕ Add New Series</h2>
     <form id="add-series-form">
       <div class="form-group">
-        <label>Series Name</label>
-        <input type="text" id="series-name" placeholder="e.g., The Amazing Spider-Man" required>
+        <label>Comic Vine Series URL</label>
+        <input type="text" id="comic-vine-url" placeholder="https://comicvine.gamespot.com/series-name/1234-567890/" required>
+        <p style="font-size: 12px; color: #666; margin-top: 5px;">
+          Just paste the full Comic Vine series link and we'll extract everything.
+        </p>
       </div>
       <div class="form-group">
-        <label>Comic Vine Series ID</label>
-        <input type="text" id="comic-vine-id" placeholder="e.g., 12345" required>
-        <p style="font-size: 12px; color: #666; margin-top: 5px;">
-          Find this in the Comic Vine URL: comicvine.gamespot.com/series/<strong>name</strong>/<strong>12345</strong>/
-        </p>
+        <label>Series Name (optional — we'll try to guess)</label>
+        <input type="text" id="series-name" placeholder="e.g., The Amazing Spider-Man">
       </div>
       <button type="submit" id="submit-btn">Add Series</button>
       <div id="form-message"></div>
     </form>
   </div>
+
 
   <!-- Tracked Series -->
   <div class="card">
@@ -207,16 +208,46 @@
     }
   }
 
-  // Add new series
+    // Add new series
   document.getElementById('add-series-form').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const seriesName = document.getElementById('series-name').value.trim();
-    const comicVineId = document.getElementById('comic-vine-id').value.trim();
+    const urlInput = document.getElementById('comic-vine-url').value.trim();
+    let seriesName = document.getElementById('series-name').value.trim();
     const messageDiv = document.getElementById('form-message');
     const submitBtn = document.getElementById('submit-btn');
 
     messageDiv.innerHTML = '';
+
+    // Extract ID from URL
+    let comicVineId;
+    try {
+      const url = new URL(urlInput);
+      const pathParts = url.pathname.split('/').filter(p => p);
+      const lastPart = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
+      
+      // URL format: /series-name/1234-567890/
+      // We want the part after the last dash
+      if (lastPart.includes('-')) {
+        comicVineId = lastPart.split('-')[1];
+      } else {
+        comicVineId = lastPart;
+      }
+
+      if (!comicVineId) throw new Error('Could not extract ID');
+
+      // If no name provided, try to extract from URL slug
+      if (!seriesName) {
+        seriesName = pathParts[pathParts.length - 2]
+          .split('-')
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+      }
+    } catch (err) {
+      messageDiv.innerHTML = '<p class="message error">❌ Invalid Comic Vine URL. Make sure you pasted the full link.</p>';
+      return;
+    }
+
     submitBtn.disabled = true;
     submitBtn.textContent = 'Adding...';
 
