@@ -19,49 +19,55 @@ exports.handler = async () => {
 
     for (const series of seriesList) {
       try {
-        console.log(`Searching League of Comic Geeks for: ${series.series_name}`);
+        console.log(`Searching Google Books for: ${series.series_name}`);
         
-        const lgResponse = await fetch(
-          `https://leagueofcomicgeeks.com/api/releases/search?title=${encodeURIComponent(series.series_name)}`
+        // Search for trade paperbacks
+        const query = `${series.series_name} trade paperback`;
+        const gbResponse = await fetch(
+          `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40`
         );
         
-        console.log(`Response status: ${lgResponse.status}`);
-        
-        const lgData = await lgResponse.json();
-        console.log(`League response for ${series.series_name}:`, JSON.stringify(lgData).substring(0, 500));
+        const gbData = await gbResponse.json();
+        console.log(`Response status: ${gbResponse.status}`);
 
-        if (!lgData || !lgData.data || lgData.data.length === 0) {
+        if (!gbData.items || gbData.items.length === 0) {
           console.log(`No results for: ${series.series_name}`);
           continue;
         }
 
-        const tpbs = lgData.data.filter(release => 
-          release.type && 
-          (release.type.toLowerCase().includes('trade paperback') || 
-           release.type.toLowerCase().includes('hardcover'))
-        );
+        console.log(`Found ${gbData.items.length} results for ${series.series_name}`);
 
-        console.log(`Found ${tpbs.length} TPBs/hardcovers for ${series.series_name}`);
+        for (const book of gbData.items) {
+          const volumeInfo = book.volumeInfo;
+          
+          // Check if it's actually a trade paperback
+          if (!volumeInfo.title.toLowerCase().includes('trade paperback') &&
+              !volumeInfo.description?.toLowerCase().includes('trade paperback')) {
+            continue;
+          }
 
-        for (const tpb of tpbs) {
+          // Check if we already have this
+          const bookId = book.id;
           const { data: existing } = await supabase
             .from('tpbs')
             .select('id')
-            .eq('comic_vine_volume_id', `lcg-${tpb.id}`)
+            .eq('comic_vine_volume_id', `gb-${bookId}`)
             .limit(1);
 
           if (existing && existing.length > 0) continue;
 
+          const publishedDate = volumeInfo.publishedDate ? new Date(volumeInfo.publishedDate) : null;
+
           await supabase.from('tpbs').insert({
             series_id: series.id,
-            comic_vine_volume_id: `lcg-${tpb.id}`,
-            volume_number: tpb.volume || null,
-            title: tpb.title || tpb.name,
-            release_date: tpb.release_date || null,
+            comic_vine_volume_id: `gb-${bookId}`,
+            volume_number: null,
+            title: volumeInfo.title,
+            release_date: publishedDate,
           });
 
           newTPBsFound++;
-          console.log(`New TPB found: ${tpb.title}`);
+          console.log(`New TPB found: ${volumeInfo.title}`);
         }
       } catch (err) {
         console.error(`Error with ${series.series_name}:`, err.message);
