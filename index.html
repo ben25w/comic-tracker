@@ -134,7 +134,6 @@
     </form>
   </div>
 
-
   <!-- Tracked Series -->
   <div class="card">
     <h2 style="font-size: 18px; margin-bottom: 15px;">📚 Tracked Series</h2>
@@ -146,7 +145,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  const supabase = window.supabase.createClient(
+  const supabaseClient = window.supabase.createClient(
     'https://rdmsbloglmlvlvjpxgxr.supabase.co',
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkbXNibG9nbG1sdmx2anB4Z3hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5NjkzMzEsImV4cCI6MjA4NDU0NTMzMX0.P4wX9w6ejscrgpetO4ysQZP7R7dadFbfiZYhSnMXwH4'
   );
@@ -169,7 +168,7 @@
     listDiv.innerHTML = '<p class="loading">Loading...</p>';
 
     try {
-      const { data: series, error } = await supabase
+      const { data: series, error } = await supabaseClient
         .from('series')
         .select('*')
         .order('id', { ascending: false });
@@ -183,7 +182,7 @@
 
       let html = '';
       for (const s of series) {
-        const { data: latestTpb } = await supabase
+        const { data: latestTpb } = await supabaseClient
           .from('tpbs')
           .select('release_date, title')
           .eq('series_id', s.id)
@@ -208,7 +207,7 @@
     }
   }
 
-    // Add new series
+  // Add new series
   document.getElementById('add-series-form').addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -252,7 +251,7 @@
     submitBtn.textContent = 'Adding...';
 
     try {
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('series')
         .insert({ series_name: seriesName, comic_vine_id: comicVineId });
 
