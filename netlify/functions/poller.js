@@ -7,10 +7,8 @@ const supabase = createClient(
 
 exports.handler = async () => {
   try {
-    // Keep Supabase awake
     await supabase.from('last_poll').upsert({ id: 1, last_checked_at: new Date() });
 
-    // Get all tracked series
     const { data: seriesList, error: seriesError } = await supabase
       .from('series')
       .select('*');
@@ -21,35 +19,39 @@ exports.handler = async () => {
 
     for (const series of seriesList) {
       try {
-        // Query League of Comic Geeks for releases
+        console.log(`Searching League of Comic Geeks for: ${series.series_name}`);
+        
         const lgResponse = await fetch(
           `https://leagueofcomicgeeks.com/api/releases/search?title=${encodeURIComponent(series.series_name)}`
         );
+        
+        console.log(`Response status: ${lgResponse.status}`);
+        
         const lgData = await lgResponse.json();
+        console.log(`League response for ${series.series_name}:`, JSON.stringify(lgData).substring(0, 500));
 
         if (!lgData || !lgData.data || lgData.data.length === 0) {
           console.log(`No results for: ${series.series_name}`);
           continue;
         }
 
-        // Filter for TPBs/Hardcovers
         const tpbs = lgData.data.filter(release => 
           release.type && 
           (release.type.toLowerCase().includes('trade paperback') || 
            release.type.toLowerCase().includes('hardcover'))
         );
 
+        console.log(`Found ${tpbs.length} TPBs/hardcovers for ${series.series_name}`);
+
         for (const tpb of tpbs) {
-          // Check if we already have this
           const { data: existing } = await supabase
             .from('tpbs')
             .select('id')
             .eq('comic_vine_volume_id', `lcg-${tpb.id}`)
-            .single();
+            .limit(1);
 
-          if (existing) continue; // Already recorded
+          if (existing && existing.length > 0) continue;
 
-          // Add new TPB
           await supabase.from('tpbs').insert({
             series_id: series.id,
             comic_vine_volume_id: `lcg-${tpb.id}`,
@@ -62,7 +64,7 @@ exports.handler = async () => {
           console.log(`New TPB found: ${tpb.title}`);
         }
       } catch (err) {
-        console.error(`Error fetching ${series.series_name}:`, err.message);
+        console.error(`Error with ${series.series_name}:`, err.message);
       }
     }
 
