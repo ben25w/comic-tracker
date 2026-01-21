@@ -5,8 +5,6 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
-const COMIC_VINE_API_KEY = process.env.COMIC_VINE_API_KEY;
-
 exports.handler = async () => {
   try {
     // Keep Supabase awake
@@ -22,40 +20,49 @@ exports.handler = async () => {
     let newTPBsFound = 0;
 
     for (const series of seriesList) {
-      // Query Comic Vine for volumes
-      const cvResponse = await fetch(
-        `https://comicvine.gamespot.com/api/volumes/?api_key=${COMIC_VINE_API_KEY}&filter=name:${encodeURIComponent(series.series_name)}&format=json`
-      );
-      const cvData = await cvResponse.json();
+      try {
+        // Query League of Comic Geeks for releases
+        const lgResponse = await fetch(
+          `https://leagueofcomicgeeks.com/api/releases/search?title=${encodeURIComponent(series.series_name)}`
+        );
+        const lgData = await lgResponse.json();
 
-      if (!cvData.results) continue;
+        if (!lgData || !lgData.data || lgData.data.length === 0) {
+          console.log(`No results for: ${series.series_name}`);
+          continue;
+        }
 
-      for (const volume of cvData.results) {
-        // Only TPBs
-        if (!volume.volume_type || !volume.volume_type.includes('Trade Paperback')) continue;
+        // Filter for TPBs/Hardcovers
+        const tpbs = lgData.data.filter(release => 
+          release.type && 
+          (release.type.toLowerCase().includes('trade paperback') || 
+           release.type.toLowerCase().includes('hardcover'))
+        );
 
-        // Check if we already have this
-        const { data: existing } = await supabase
-          .from('tpbs')
-          .select('id')
-          .eq('comic_vine_volume_id', volume.id.toString())
-          .single();
+        for (const tpb of tpbs) {
+          // Check if we already have this
+          const { data: existing } = await supabase
+            .from('tpbs')
+            .select('id')
+            .eq('comic_vine_volume_id', `lcg-${tpb.id}`)
+            .single();
 
-        if (existing) continue; // Already recorded
+          if (existing) continue; // Already recorded
 
-        // Add new TPB
-        await supabase.from('tpbs').insert({
-          series_id: series.id,
-          comic_vine_volume_id: volume.id.toString(),
-          volume_number: volume.issue_count,
-          title: volume.name,
-          release_date: volume.start_year ? new Date(`${volume.start_year}-01-01`) : null,
-        });
+          // Add new TPB
+          await supabase.from('tpbs').insert({
+            series_id: series.id,
+            comic_vine_volume_id: `lcg-${tpb.id}`,
+            volume_number: tpb.volume || null,
+            title: tpb.title || tpb.name,
+            release_date: tpb.release_date || null,
+          });
 
-        newTPBsFound++;
-
-        // Email alert (optional — we'll add Resend later)
-        console.log(`New TPB found: ${volume.name}`);
+          newTPBsFound++;
+          console.log(`New TPB found: ${tpb.title}`);
+        }
+      } catch (err) {
+        console.error(`Error fetching ${series.series_name}:`, err.message);
       }
     }
 
