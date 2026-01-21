@@ -49,9 +49,13 @@
   }
   button:hover { background: #0052a3; }
   button:disabled { background: #ccc; cursor: not-allowed; }
-  .series-list {
-    margin-top: 20px;
+  .refresh-btn {
+    background: #28a745;
+    width: auto;
+    margin-bottom: 15px;
   }
+  .refresh-btn:hover { background: #218838; }
+  .series-list { margin-top: 20px; }
   .series-item {
     background: #f9f9f9;
     padding: 15px;
@@ -92,6 +96,7 @@
     border-radius: 4px;
     cursor: pointer;
     font-size: 13px;
+    width: auto;
   }
   .copy-btn:hover { background: #0052a3; }
   .message { padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 13px; }
@@ -114,7 +119,7 @@
     <button class="copy-btn" onclick="copyToClipboard()">Copy URL</button>
   </div>
 
-    <!-- Add New Series -->
+  <!-- Add New Series -->
   <div class="card">
     <h2 style="font-size: 18px; margin-bottom: 15px;">➕ Add New Series</h2>
     <form id="add-series-form">
@@ -130,10 +135,10 @@
     </form>
   </div>
 
-
   <!-- Tracked Series -->
   <div class="card">
     <h2 style="font-size: 18px; margin-bottom: 15px;">📚 Tracked Series</h2>
+    <button class="refresh-btn" onclick="refreshNow()">🔄 Refresh Now</button>
     <div id="series-list" class="series-list">
       <p class="loading">Loading series...</p>
     </div>
@@ -159,6 +164,30 @@
     });
   }
 
+  // Manually trigger poller
+  async function refreshNow() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '⏳ Checking...';
+
+    try {
+      const response = await fetch('/.netlify/functions/poller');
+      const data = await response.json();
+      console.log('Poller response:', data);
+      
+      setTimeout(() => {
+        loadSeries();
+        btn.disabled = false;
+        btn.textContent = '🔄 Refresh Now';
+      }, 1000);
+    } catch (err) {
+      console.error('Poller error:', err);
+      btn.disabled = false;
+      btn.textContent = '🔄 Refresh Now';
+      alert('❌ Error running poller. Check console.');
+    }
+  }
+
   // Load series list
   async function loadSeries() {
     const listDiv = document.getElementById('series-list');
@@ -170,7 +199,12 @@
         .select('*')
         .order('id', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Series query error:', error);
+        throw error;
+      }
+
+      console.log('Series found:', series);
 
       if (!series || series.length === 0) {
         listDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No series tracked yet. Add one above!</p>';
@@ -187,7 +221,7 @@
           .limit(1)
           .single();
 
-        const nextDate = latestTpb?.release_date ? new Date(latestTpb.release_date).toLocaleDateString('en-GB') : 'Unknown';
+        const nextDate = latestTpb?.release_date ? new Date(latestTpb.release_date).toLocaleDateString('en-GB') : 'Waiting for poller...';
         const nextTitle = latestTpb?.title || 'No TPBs detected yet';
 
         html += `
@@ -200,11 +234,12 @@
 
       listDiv.innerHTML = html;
     } catch (err) {
+      console.error('Error loading series:', err);
       listDiv.innerHTML = `<p class="error">Error loading series: ${err.message}</p>`;
     }
   }
 
-    // Add new series
+  // Add new series
   document.getElementById('add-series-form').addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -223,50 +258,13 @@
     submitBtn.textContent = 'Adding...';
 
     try {
-      const { error } = await supabaseClient
+      console.log('Inserting series:', seriesName);
+      
+      const { data, error } = await supabaseClient
         .from('series')
         .insert({ series_name: seriesName, comic_vine_id: seriesName });
 
-      if (error) {
-        if (error.message.includes('duplicate')) {
-          throw new Error('This series is already tracked.');
-        }
-        throw error;
-      }
-
-      messageDiv.innerHTML = '<p class="message success">✅ Series added! The poller will check for new TPBs tomorrow.</p>';
-      document.getElementById('add-series-form').reset();
-      await loadSeries();
-    } catch (err) {
-      messageDiv.innerHTML = `<p class="message error">❌ ${err.message}</p>`;
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Add Series';
-    }
-  });
-
-
-      if (!comicVineId) throw new Error('Could not extract ID');
-
-      // If no name provided, try to extract from URL slug
-      if (!seriesName) {
-        seriesName = pathParts[pathParts.length - 2]
-          .split('-')
-          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(' ');
-      }
-    } catch (err) {
-      messageDiv.innerHTML = '<p class="message error">❌ Invalid Comic Vine URL. Make sure you pasted the full link.</p>';
-      return;
-    }
-
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Adding...';
-
-    try {
-      const { error } = await supabaseClient
-        .from('series')
-        .insert({ series_name: seriesName, comic_vine_id: comicVineId });
+      console.log('Insert response:', { data, error });
 
       if (error) {
         if (error.message.includes('duplicate')) {
@@ -275,10 +273,14 @@
         throw error;
       }
 
-      messageDiv.innerHTML = '<p class="message success">✅ Series added! Check your calendar in a few minutes.</p>';
+      messageDiv.innerHTML = '<p class="message success">✅ Series added! Click "Refresh Now" to check for TPBs immediately, or wait for the daily poller.</p>';
       document.getElementById('add-series-form').reset();
-      await loadSeries();
+      
+      setTimeout(() => {
+        loadSeries();
+      }, 500);
     } catch (err) {
+      console.error('Add series error:', err);
       messageDiv.innerHTML = `<p class="message error">❌ ${err.message}</p>`;
     } finally {
       submitBtn.disabled = false;
