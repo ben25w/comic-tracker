@@ -1,0 +1,8 @@
+{
+  "name": "comic-vine-tpb-tracker",
+  "version": "1.0.0",
+  "description": "Comic Vine TPB tracker with calendar feed",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.4"
+  }
+}
