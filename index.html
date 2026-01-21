@@ -210,7 +210,6 @@
         listDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No series tracked yet. Add one above!</p>';
         return;
       }
-
       let html = '';
       for (const s of series) {
         const { data: latestTpb } = await supabaseClient
@@ -218,8 +217,8 @@
           .select('release_date, title')
           .eq('series_id', s.id)
           .order('release_date', { ascending: false })
-          .limit(1)
-          .single();
+          .limit(1);
+
 
         const nextDate = latestTpb?.release_date ? new Date(latestTpb.release_date).toLocaleDateString('en-GB') : 'Waiting for poller...';
         const nextTitle = latestTpb?.title || 'No TPBs detected yet';
