@@ -114,25 +114,22 @@
     <button class="copy-btn" onclick="copyToClipboard()">Copy URL</button>
   </div>
 
-  <!-- Add New Series -->
+    <!-- Add New Series -->
   <div class="card">
     <h2 style="font-size: 18px; margin-bottom: 15px;">➕ Add New Series</h2>
     <form id="add-series-form">
       <div class="form-group">
-        <label>Comic Vine Series URL</label>
-        <input type="text" id="comic-vine-url" placeholder="https://comicvine.gamespot.com/series-name/1234-567890/" required>
+        <label>Series Name</label>
+        <input type="text" id="series-name" placeholder="e.g., The Amazing Spider-Man" required>
         <p style="font-size: 12px; color: #666; margin-top: 5px;">
-          Just paste the full Comic Vine series link and we'll extract everything.
+          Just type the comic series name. We'll search League of Comic Geeks for TPBs automatically.
         </p>
-      </div>
-      <div class="form-group">
-        <label>Series Name (optional — we'll try to guess)</label>
-        <input type="text" id="series-name" placeholder="e.g., The Amazing Spider-Man">
       </div>
       <button type="submit" id="submit-btn">Add Series</button>
       <div id="form-message"></div>
     </form>
   </div>
+
 
   <!-- Tracked Series -->
   <div class="card">
@@ -207,31 +204,47 @@
     }
   }
 
-  // Add new series
+    // Add new series
   document.getElementById('add-series-form').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const urlInput = document.getElementById('comic-vine-url').value.trim();
-    let seriesName = document.getElementById('series-name').value.trim();
+    const seriesName = document.getElementById('series-name').value.trim();
     const messageDiv = document.getElementById('form-message');
     const submitBtn = document.getElementById('submit-btn');
 
     messageDiv.innerHTML = '';
 
-    // Extract ID from URL
-    let comicVineId;
+    if (!seriesName) {
+      messageDiv.innerHTML = '<p class="message error">❌ Please enter a series name.</p>';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Adding...';
+
     try {
-      const url = new URL(urlInput);
-      const pathParts = url.pathname.split('/').filter(p => p);
-      const lastPart = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
-      
-      // URL format: /series-name/1234-567890/
-      // We want the part after the last dash
-      if (lastPart.includes('-')) {
-        comicVineId = lastPart.split('-')[1];
-      } else {
-        comicVineId = lastPart;
+      const { error } = await supabaseClient
+        .from('series')
+        .insert({ series_name: seriesName, comic_vine_id: seriesName });
+
+      if (error) {
+        if (error.message.includes('duplicate')) {
+          throw new Error('This series is already tracked.');
+        }
+        throw error;
       }
+
+      messageDiv.innerHTML = '<p class="message success">✅ Series added! The poller will check for new TPBs tomorrow.</p>';
+      document.getElementById('add-series-form').reset();
+      await loadSeries();
+    } catch (err) {
+      messageDiv.innerHTML = `<p class="message error">❌ ${err.message}</p>`;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Add Series';
+    }
+  });
+
 
       if (!comicVineId) throw new Error('Could not extract ID');
 
