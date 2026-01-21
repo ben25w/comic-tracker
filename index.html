@@ -2,10 +2,247 @@
 <meta charset='utf-8'>
 <title>Comic Vine TPB Tracker</title>
 <meta name='viewport' content='width=device-width, initial-scale=1'>
-<h1>Comic Vine TPB Tracker</h1>
-<p>Calendar feed is running. Check your calendar app for updates.</p>
-<p><strong>ICS Feed URL:</strong> <code id="feed-url"></code></p>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f5f5;
+    padding: 20px;
+  }
+  .container { max-width: 800px; margin: 0 auto; }
+  h1 { margin-bottom: 10px; color: #333; }
+  .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
+  .card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .form-group {
+    margin-bottom: 15px;
+  }
+  label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+  }
+  input, button {
+    font-size: 14px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  input {
+    width: 100%;
+    font-family: inherit;
+  }
+  button {
+    background: #0066cc;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    width: 100%;
+  }
+  button:hover { background: #0052a3; }
+  button:disabled { background: #ccc; cursor: not-allowed; }
+  .series-list {
+    margin-top: 20px;
+  }
+  .series-item {
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    border-left: 4px solid #0066cc;
+  }
+  .series-name {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 5px;
+  }
+  .series-next {
+    font-size: 13px;
+    color: #666;
+  }
+  .ics-section {
+    background: #e8f4f8;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+  }
+  .ics-section strong { display: block; margin-bottom: 8px; }
+  .ics-url {
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    word-break: break-all;
+    font-size: 12px;
+    font-family: monospace;
+  }
+  .copy-btn {
+    margin-top: 10px;
+    padding: 8px;
+    background: #0066cc;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .copy-btn:hover { background: #0052a3; }
+  .message { padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 13px; }
+  .success { background: #d4edda; color: #155724; }
+  .error { background: #f8d7da; color: #721c24; }
+  .loading { color: #0066cc; }
+</style>
+
+<div class="container">
+  <h1>Comic Vine TPB Tracker</h1>
+  <p class="subtitle">Automatically detect new trade paperbacks and add them to your calendar</p>
+
+  <!-- ICS Feed Section -->
+  <div class="ics-section">
+    <strong>📅 Calendar Feed URL</strong>
+    <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+      Add this to Google Calendar, Apple Calendar, or Outlook to get automatic updates:
+    </p>
+    <div class="ics-url" id="ics-url">Loading...</div>
+    <button class="copy-btn" onclick="copyToClipboard()">Copy URL</button>
+  </div>
+
+  <!-- Add New Series -->
+  <div class="card">
+    <h2 style="font-size: 18px; margin-bottom: 15px;">➕ Add New Series</h2>
+    <form id="add-series-form">
+      <div class="form-group">
+        <label>Series Name</label>
+        <input type="text" id="series-name" placeholder="e.g., The Amazing Spider-Man" required>
+      </div>
+      <div class="form-group">
+        <label>Comic Vine Series ID</label>
+        <input type="text" id="comic-vine-id" placeholder="e.g., 12345" required>
+        <p style="font-size: 12px; color: #666; margin-top: 5px;">
+          Find this in the Comic Vine URL: comicvine.gamespot.com/series/<strong>name</strong>/<strong>12345</strong>/
+        </p>
+      </div>
+      <button type="submit" id="submit-btn">Add Series</button>
+      <div id="form-message"></div>
+    </form>
+  </div>
+
+  <!-- Tracked Series -->
+  <div class="card">
+    <h2 style="font-size: 18px; margin-bottom: 15px;">📚 Tracked Series</h2>
+    <div id="series-list" class="series-list">
+      <p class="loading">Loading series...</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+  const supabase = window.supabase.createClient(
+    'https://rdmsbloglmlvlvjpxgxr.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkbXNibG9nbG1sdmx2anB4Z3hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5NjkzMzEsImV4cCI6MjA4NDU0NTMzMX0.P4wX9w6ejscrgpetO4ysQZP7R7dadFbfiZYhSnMXwH4'
+  );
+
+  // Set ICS URL
   const feedUrl = `${window.location.origin}/.netlify/functions/generate-ics`;
-  document.getElementById('feed-url').textContent = feedUrl;
+  document.getElementById('ics-url').textContent = feedUrl;
+
+  // Copy to clipboard
+  function copyToClipboard() {
+    const url = document.getElementById('ics-url').textContent;
+    navigator.clipboard.writeText(url).then(() => {
+      alert('✅ Copied to clipboard!');
+    });
+  }
+
+  // Load series list
+  async function loadSeries() {
+    const listDiv = document.getElementById('series-list');
+    listDiv.innerHTML = '<p class="loading">Loading...</p>';
+
+    try {
+      const { data: series, error } = await supabase
+        .from('series')
+        .select('*')
+        .order('id', { ascending: false });
+
+      if (error) throw error;
+
+      if (!series || series.length === 0) {
+        listDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No series tracked yet. Add one above!</p>';
+        return;
+      }
+
+      let html = '';
+      for (const s of series) {
+        const { data: latestTpb } = await supabase
+          .from('tpbs')
+          .select('release_date, title')
+          .eq('series_id', s.id)
+          .order('release_date', { ascending: false })
+          .limit(1)
+          .single();
+
+        const nextDate = latestTpb?.release_date ? new Date(latestTpb.release_date).toLocaleDateString('en-GB') : 'Unknown';
+        const nextTitle = latestTpb?.title || 'No TPBs detected yet';
+
+        html += `
+          <div class="series-item">
+            <div class="series-name">${s.series_name}</div>
+            <div class="series-next">📅 Next: ${nextTitle} (${nextDate})</div>
+          </div>
+        `;
+      }
+
+      listDiv.innerHTML = html;
+    } catch (err) {
+      listDiv.innerHTML = `<p class="error">Error loading series: ${err.message}</p>`;
+    }
+  }
+
+  // Add new series
+  document.getElementById('add-series-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const seriesName = document.getElementById('series-name').value.trim();
+    const comicVineId = document.getElementById('comic-vine-id').value.trim();
+    const messageDiv = document.getElementById('form-message');
+    const submitBtn = document.getElementById('submit-btn');
+
+    messageDiv.innerHTML = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Adding...';
+
+    try {
+      const { error } = await supabase
+        .from('series')
+        .insert({ series_name: seriesName, comic_vine_id: comicVineId });
+
+      if (error) {
+        if (error.message.includes('duplicate')) {
+          throw new Error('This series is already tracked.');
+        }
+        throw error;
+      }
+
+      messageDiv.innerHTML = '<p class="message success">✅ Series added! Check your calendar in a few minutes.</p>';
+      document.getElementById('add-series-form').reset();
+      await loadSeries();
+    } catch (err) {
+      messageDiv.innerHTML = `<p class="message error">❌ ${err.message}</p>`;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Add Series';
+    }
+  });
+
+  // Load on page load
+  loadSeries();
 </script>
