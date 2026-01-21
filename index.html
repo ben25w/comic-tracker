@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset='utf-8'>
+<title>Comic Vine TPB Tracker</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<h1>Comic Vine TPB Tracker</h1>
+<p>Calendar feed is running. Check your calendar app for updates.</p>
+<p><strong>ICS Feed URL:</strong> <code id="feed-url"></code></p>
+<script>
+  const feedUrl = `${window.location.origin}/.netlify/functions/generate-ics`;
+  document.getElementById('feed-url').textContent = feedUrl;
+</script>
