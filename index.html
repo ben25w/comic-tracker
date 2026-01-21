@@ -212,7 +212,7 @@
       }
           let html = '';
       for (const s of series) {
-        const { data: latestTpb, error: tpbError } = await supabaseClient
+        const { data: tpbList, error: tpbError } = await supabaseClient
           .from('tpbs')
           .select('release_date, title')
           .eq('series_id', s.id)
@@ -223,10 +223,10 @@
           console.error(`Error fetching TPBs for series ${s.id}:`, tpbError);
         }
 
-
-
+        const latestTpb = tpbList && tpbList.length > 0 ? tpbList[0] : null;
         const nextDate = latestTpb?.release_date ? new Date(latestTpb.release_date).toLocaleDateString('en-GB') : 'Waiting for poller...';
         const nextTitle = latestTpb?.title || 'No TPBs detected yet';
+
 
         html += `
           <div class="series-item">
